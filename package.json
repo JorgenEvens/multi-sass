@@ -1,0 +1,35 @@
+{
+  "name": "multi-sass",
+  "version": "1.0.0",
+  "description": "Compile multiple sass projects using a single compiler.",
+  "main": "bin/multi-sass",
+  "scripts": {},
+  "engines": {
+    "node": ">=6"
+  },
+  "bin": {
+    "multi-sass": "./bin/multi-sass"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jorgenevens/multi-sass.git"
+  },
+  "keywords": [
+    "node-sass",
+    "sass",
+    "multi"
+  ],
+  "author": "Jorgen Evens <jorgen@evens.eu>",
+  "license": "MIT",
+  "dependencies": {
+    "chokidar": "^1.6.1",
+    "commander": "^2.9.0",
+    "glob": "^7.1.1",
+    "node-sass": "^4.3.0"
+  },
+  "bugs": {
+    "url": "https://github.com/jorgenevens/multi-sass/issues"
+  },
+  "homepage": "https://github.com/jorgenevens/multi-sass#readme",
+  "devDependencies": {}
+}

@@ -1,0 +1,229 @@
+#!/usr/bin/env node
+
+const fs = require('fs');
+const glob = require('glob');
+const path = require('path');
+const sass = require('node-sass');
+const chokidar = require('chokidar');
+const program = require('commander');
+
+const config = [];
+
+function newConfig() {
+    config.push({
+        files: [],
+        includePaths: []
+    });
+}
+newConfig();
+
+function addOption(option, value) {
+    option = option.replace(/-([a-zA-Z0-9])/g, (m, m1) => m1.toUpperCase());
+
+    const c = config[config.length - 1];
+
+    if (Array.isArray(c[option])) {
+        c[option].push(value);
+        return;
+    }
+
+    if (value === null || typeof value === 'undefined')
+        value = true;
+
+    c[option] = value;
+}
+
+program._optionFor = program.optionFor;
+program.optionFor = function(arg) {
+    let opt = this._optionFor(arg);
+    if (opt || arg == '--help' || arg == '-h')
+        return opt;
+
+    if (/^--?.+/.test(arg)) {
+        this.option(arg + ' [v]');
+        opt = this._optionFor(arg);
+        this.on(opt.name(), v => addOption(opt.name(), opt.bool ? v : false));
+
+        return opt;
+    }
+}
+
+program.version('0.1.0')
+    .allowUnknownOption(true)
+    .usage('[config1] [-n [config2] ...]')
+    .option('--name <name>', 'Name config', v => addOption('name', v))
+    .option('-n, --next', 'Start next config', () => newConfig())
+    .option('-w, --watch', 'Enable watch', v => addOption('watch'))
+    .option('-i, --input <file>', 'Input file', v => addOption('files', v))
+    .option('-d, --directory <dir>', 'Input directory', v => addOption('directory', v))
+    .option('-r, --recursive', 'Recursively watch directories or files', v => addOption('recursive', v))
+    .option('-o, --output <file>', 'Output file or directory', v => addOption('output', v))
+    .option('--include-path <dir>', 'Path to look for imported files', v => addOption('includePaths', v))
+    .parse(process.argv);
+
+let counter = 0;
+const watchers = {};
+
+function stat(p) {
+    try { return fs.statSync(p); } catch(e) {};
+
+    return null;
+}
+
+function isDirectory(p) {
+    const s = stat(p);
+
+    if (!s)
+        return false;
+
+    return s.isDirectory();
+}
+
+function isFile(p) {
+    const s = stat(p);
+
+    if (!s)
+        return false;
+
+    return s.isFile();
+}
+
+function processPath(p) {
+    if(isDirectory(p))
+        return path.join(p, 'index.scss');
+
+    return p;
+}
+
+function compileSass(file, config) {
+    const cwd = process.cwd();
+    const files = [].concat(file);
+    const includePaths = [ cwd ].concat(config.includePaths);
+    const relativeOutput = path.relative(cwd, config.output);
+    const relativeFiles = files.map(f => path.relative(cwd, f));
+    const data = files.map(processPath)
+        .map(f => `@import '${f}';`)
+        .join('\n');
+
+    const options = Object.assign({}, config, {
+        data,
+        file: null,
+        includePaths
+    });
+
+
+    console.log(`[${config.name}]: Compiling ` + relativeFiles.join(', ') + ' to ' + relativeOutput);
+    sass.render(options, (err, result) => {
+        if (err) {
+            console.error(err.formatted);
+            return;
+        }
+
+        if (!config.output) {
+            console.error(`[${config.name}]: No output file specified, ignoring output`);
+            return;
+        }
+
+        fs.writeFile(config.output, result.css, err => {
+            err && console.error(`[${config.name}]: Error saving CSS`, err.message);
+        });
+    });
+}
+
+function watch(files, config) {
+    files = [].concat(files);
+
+    if (files.length < 1) {
+        console.error(`[${config.name}]: No files specified`);
+        process.exit();
+    }
+
+    if (!config.watch) {
+        compileSass(files, config);
+        return;
+    }
+
+    const imports = [];
+    const watcher = chokidar.watch(files, config);
+    watcher.on('change', () => compileSass(files, config));
+
+    // Add all imported files to the watcher.
+    config.importer = [].concat(config.importer || []);
+    config.importer.push(function(url, prev) {
+        if (prev === 'stdin')
+            return null;
+
+        const dir = path.dirname(prev);
+        const filename = path.join(dir, url);
+        const relname = path.relative(process.cwd(), filename);
+
+        if (imports.indexOf(relname) > -1)
+            return null;
+
+        imports.push(relname);
+        watcher.add(filename);
+        return null;
+    });
+
+    compileSass(files, config)
+
+    watchers[config.name] = watcher;
+
+    return { watcher };
+}
+
+function watchDir(directory, config) {
+    if (!config.output || isFile(config.output)) {
+        console.error(`[${config.name}]: ${config.output} is invalid.`);
+        process.exit();
+    }
+
+    const globPattern = (config.recursive ? '**/*' : '*') + '.{sass,scss}';
+    const globPath = path.resolve(directory, globPattern);
+    const globOptions = { ignore: '**/_*', follow: config.follow };
+
+    glob(globPath, globOptions, function(err, files) {
+        if (err) {
+            console.error(`[${config.name}]: Failed to match files in ${directory}`);
+            process.exit();
+        }
+
+        if (files.length < 1) {
+            console.error(`[${config.name}]: No matching files found in ${directory}`);
+            process.exit();
+        }
+
+        files.forEach(f => {
+            const relative = path.relative(directory, f)
+                .replace(/\.(scss|sass)$/, '.css');
+
+            const fileConfig = Object.assign({}, config, {
+                directory: null,
+                output: null,
+                outFile: path.resolve(config.output, relative)
+            })
+
+            init(f, fileConfig);
+        });
+    });
+}
+
+function init(files, config) {
+    if (typeof files == 'object' && !Array.isArray(files))
+        return init(files.files, files);
+
+    config.name = config.name || `config-${counter++}`;
+    config.output = config.output || config.outFile; // compatibility with node-sass
+
+    if (files.length > 0 && config.directory) {
+        console.error(`[${config.name}]: Don't mix directory and files flags`);
+        process.exit();
+    }
+
+    if (config.directory)
+        return watchDir(config.directory, config);
+
+    return watch(files, config);
+}
+
+config.forEach(c => init(c));
