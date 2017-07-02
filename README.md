@@ -15,7 +15,7 @@ Supply any combination of `node-sass` command line options, separating each conf
 **Example:**
 
 ```shell
-multi-sass --directory project1/src --output project1/css --source-map
+multi-sass --directory project1/src --output project1/css --source-map \
     --next --file project2/src/component.scss -o project2/dist/comp.min.css
 ```
 
@@ -48,4 +48,4 @@ I am releasing this under a MIT License.
 
 ## About me
 
-Find me on [GitHub](https://github.com/JorgenEvens) or [Twitter](https://twitter.com/JorgenEvens).
+Find me on [GitHub](https://github.com/JorgenEvens), [Twitter](https://twitter.com/JorgenEvens) or [my website](https://jorgen.evens.eu).
