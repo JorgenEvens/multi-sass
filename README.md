@@ -16,7 +16,7 @@ Supply any combination of `node-sass` command line options, separating each conf
 
 ```shell
 multi-sass --directory project1/src --output project1/css --source-map \
-    --next --file project2/src/component.scss -o project2/dist/comp.min.css
+    --next --input project2/src/component.scss -o project2/dist/comp.min.css
 ```
 
 **Options:**
