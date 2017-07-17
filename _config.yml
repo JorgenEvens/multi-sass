@@ -1,1 +1,4 @@
 theme: jekyll-theme-cayman
+title: Compile multiple sass code-bases at once
+description: Compile multiple sass projects using a single node-sass instance.
+google_analytics: UA-25703748-6
